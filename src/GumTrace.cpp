@@ -12,10 +12,7 @@ GumTrace *GumTrace::get_instance() {
 }
 
 GumTrace::GumTrace() {
-    _stalker = gum_stalker_new();
-    gum_stalker_set_trust_threshold(_stalker, 0);
     _transformer = gum_stalker_transformer_make_from_callback(transform_callback, nullptr, nullptr);
-
     callback_context_instance = CallbackContext::get_instance();
 }
 
@@ -120,19 +117,15 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
     Utils::append_string(buff, buff_n, callback_ctx->instruction.mnemonic);
     Utils::append_char(buff, buff_n, ' ');
     Utils::append_string(buff, buff_n, callback_ctx->instruction.op_str);
+    Utils::append_string(buff, buff_n, "; ");
 
     bool is_write = false;
-    bool is_first_print = true;
     uintptr_t mem_r_addr = 0x0;
     for (int i = 0; i < callback_ctx->instruction_detail.arm64.op_count; i++) {
         cs_arm64_op &op = callback_ctx->instruction_detail.arm64.operands[i];
         __uint128_t reg_value = 0;
         if ((op.access & CS_AC_READ) && (op.access & CS_AC_WRITE) && op.type == ARM64_OP_REG) {
             if (Utils::get_register_value(op.reg, cpu_context, reg_value)) {
-                if (is_first_print) {
-                    is_first_print = false;
-                    Utils::append_string(buff, buff_n, "; ");
-                }
 
                 const char *reg_name = cs_reg_name(callback_ctx->handle, op.reg);
                 Utils::append_string(buff, buff_n, reg_name);
@@ -141,15 +134,9 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
                 Utils::append_char(buff, buff_n, ' ');
             }
             is_write = true;
-            if (self->write_reg_list.num < 31) {
-                self->write_reg_list.regs[self->write_reg_list.num++] = op.reg;
-            }
+            self->write_reg_list.regs[self->write_reg_list.num++] = op.reg;
         } else if (op.access & CS_AC_READ && op.type == ARM64_OP_REG) {
             if (Utils::get_register_value(op.reg, cpu_context, reg_value)) {
-                if (is_first_print) {
-                    is_first_print = false;
-                    Utils::append_string(buff, buff_n, "; ");
-                }
 
                 const char *reg_name = cs_reg_name(callback_ctx->handle, op.reg);
                 Utils::append_string(buff, buff_n, reg_name);
@@ -161,11 +148,6 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             __uint128_t base = 0;
             __uint128_t index = 0;
             bool flag = true;
-
-            if (is_first_print) {
-                is_first_print = false;
-                Utils::append_string(buff, buff_n, "; ");
-            }
 
             if (op.mem.base != ARM64_REG_INVALID) {
                 flag = Utils::get_register_value(op.mem.base, cpu_context, base);
@@ -188,19 +170,19 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             if (flag) {
                 uintptr_t shifted_index = Utils::apply_shift(index, op.shift.type, op.shift.value);
                 uintptr_t write_address = base + shifted_index + op.mem.disp;
-                Utils::append_string(buff, buff_n, "mem_r=0x");
+                Utils::append_string(buff, buff_n, callback_ctx->instruction.mnemonic[0] == 'l' ? "mem_r=0x" : "mem_w=0x");
                 Utils::append_uint64_hex(buff, buff_n, write_address);
                 Utils::append_char(buff, buff_n, ' ');
+            }
+
+            if (strstr(callback_ctx->instruction.op_str, "],") || strstr(callback_ctx->instruction.op_str, "]!")) {
+                is_write = true;
+                self->write_reg_list.regs[self->write_reg_list.num++] = op.mem.base;
             }
         }  else if ((op.access & CS_AC_WRITE) && op.type == ARM64_OP_MEM) {
             __uint128_t base = 0;
             __uint128_t index = 0;
             bool flag = true;
-
-            if (is_first_print) {
-                is_first_print = false;
-                Utils::append_string(buff, buff_n, "; ");
-            }
 
             if (op.mem.base != ARM64_REG_INVALID) {
                 flag = Utils::get_register_value(op.mem.base, cpu_context, base);
@@ -232,11 +214,6 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             __uint128_t index = 0;
             bool flag = true;
 
-            if (is_first_print) {
-                is_first_print = false;
-                Utils::append_string(buff, buff_n, "; ");
-            }
-
             if (op.mem.base != ARM64_REG_INVALID) {
                 flag = Utils::get_register_value(op.mem.base, cpu_context, base);
                 const char *base_reg_name = cs_reg_name(callback_ctx->handle, op.mem.base);
@@ -263,10 +240,6 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             }
         } else if (op.access & CS_AC_WRITE && op.type == ARM64_OP_REG) {
             if (Utils::get_register_value(op.reg, cpu_context, reg_value)) {
-                if (is_first_print) {
-                    is_first_print = false;
-                    Utils::append_string(buff, buff_n, "; ");
-                }
 
                 const char *reg_name = cs_reg_name(callback_ctx->handle, op.reg);
                 Utils::append_string(buff, buff_n, reg_name);
@@ -276,9 +249,7 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
             }
 
             is_write = true;
-            if (self->write_reg_list.num < 31) {
-                self->write_reg_list.regs[self->write_reg_list.num++] = op.reg;
-            }
+            self->write_reg_list.regs[self->write_reg_list.num++] = op.reg;
         }
     }
 
@@ -339,7 +310,7 @@ void GumTrace::callout_callback(GumCpuContext *cpu_context, gpointer user_data) 
 
     skip_call:
     self->trace_flush++;
-    if (self->options & _GUM_OPTIONS_DEBUG) {
+    if (self->options.mode == GUM_OPTIONS_MODE_DEBUG) {
         if (self->trace_flush > 20) {
             if (buff_n > 0) {
                 self->trace_file.write(buff, buff_n);
@@ -404,6 +375,30 @@ const std::string *GumTrace::in_range_module(size_t address) {
             return &pair.first;
         }
     }
+    return nullptr;
+}
+
+const RangeInfo* GumTrace::find_range_by_address(uintptr_t addr) {
+    if (safa_ranges.empty()) return nullptr;
+
+    int left = 0;
+    int right = safa_ranges.size() - 1;
+
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        const auto &info = safa_ranges[mid];
+
+        if (addr >= info.base && addr < info.end) {
+            return &info;
+        }
+
+        if (addr < info.base) {
+            right = mid - 1;
+        } else {
+            left = mid + 1;
+        }
+    }
+
     return nullptr;
 }
 

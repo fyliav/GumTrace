@@ -14,12 +14,15 @@ struct REG_LIST {
 };
 
 
-typedef uint GUM_OPTIONS;
-
 typedef enum {
-    _GUM_OPTIONS_NOTHING = 0,
-    _GUM_OPTIONS_DEBUG = 1 << 0
-} _GUM_OPTIONS;
+    GUM_OPTIONS_MODE_Stand = 0,
+    GUM_OPTIONS_MODE_DEBUG,
+    GUM_OPTIONS_MODE_STABLE
+} GUM_OPTIONS_MODE;
+
+struct GUM_OPTIONS {
+    uint64_t mode;
+};
 
 #define BUFFER_SIZE (1024 * 1024 * 10)
 
@@ -31,6 +34,13 @@ struct FUNC_CONTEXT {
     bool call;
     bool is_jni;
     GumCpuContext cpu_context;
+};
+
+struct RangeInfo {
+    uintptr_t base;
+    uintptr_t size;
+    uintptr_t end;
+    std::string file_path;
 };
 
 class GumTrace {
@@ -51,6 +61,7 @@ public:
 
     static void transform_callback(GumStalkerIterator *iterator, GumStalkerOutput *output, gpointer user_data);
     const std::string* in_range_module(size_t address);
+    const RangeInfo* find_range_by_address(uintptr_t addr);
     const std::map<std::string, std::size_t>& get_module_by_name(const std::string &module_name);
     void follow();
     void unfollow();
@@ -68,6 +79,7 @@ public:
     } last_module_cache;
 
     GUM_OPTIONS options;
+    std::vector<RangeInfo> safa_ranges;
 
     std::unordered_map<size_t, std::string> svc_func_maps;
     std::unordered_map<size_t, std::string> func_fds;

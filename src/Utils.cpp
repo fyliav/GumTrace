@@ -337,6 +337,9 @@ bool Utils::get_register_value(arm64_reg reg, _GumArm64CpuContext *ctx, __uint12
     } else if (reg >= ARM64_REG_B0 && reg <= ARM64_REG_B31) {
         int idx = reg - ARM64_REG_B0;
         value = ctx->v[idx].b;
+    }  else if (reg >= ARM64_REG_V0 && reg <= ARM64_REG_V31) {
+        int idx = reg - ARM64_REG_V0;
+        value = *(__uint128_t *)(ctx->v[idx].q);
     } else {
         switch (reg) {
             case ARM64_REG_SP:

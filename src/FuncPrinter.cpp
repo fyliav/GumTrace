@@ -181,6 +181,12 @@ void FuncPrinter::read_string(int& buff_n, char *buff, char* str, size_t max_len
         return;
     }
 
+    auto GumTrace = GumTrace::get_instance();
+    if (GumTrace->options.mode == GUM_OPTIONS_MODE_STABLE && GumTrace->find_range_by_address((uintptr_t)str) == nullptr) {
+        return;
+    }
+
+
     size_t i = 0;
     while (i < max_len && buff_n < BUFFER_SIZE - 1 && str[i]) {
         buff[buff_n++] = str[i++];
@@ -192,6 +198,11 @@ void FuncPrinter::hexdump(int& buff_n, char *buff, uint64_t address, size_t coun
     Utils::auto_snprintf(buff_n, buff, "\nhexdump at address 0x%llx with length 0x%llx:\n", address, count);
 
     if (address < 0x10000) {
+        return;
+    }
+
+    auto GumTrace = GumTrace::get_instance();
+    if (GumTrace->options.mode == GUM_OPTIONS_MODE_STABLE && GumTrace->find_range_by_address((uintptr_t)address) == nullptr) {
         return;
     }
 
@@ -251,7 +262,7 @@ void FuncPrinter::before(FUNC_CONTEXT *func_context) {
     Utils::auto_snprintf(func_context->info_n, func_context->info, "call func: %s", func_context->name);
 
     auto GumTrace = GumTrace::get_instance();
-    if (GumTrace->options & _GUM_OPTIONS_DEBUG) {
+    if (GumTrace->options.mode == GUM_OPTIONS_MODE_DEBUG) {
         LOGE("call func: %s", func_context->name);
     }
 
@@ -380,7 +391,7 @@ void FuncPrinter::before(FUNC_CONTEXT *func_context) {
 void FuncPrinter::jni_before(FUNC_CONTEXT *func_context) {
     // nothing todo
     auto GumTrace = GumTrace::get_instance();
-    if (GumTrace->options & _GUM_OPTIONS_DEBUG) {
+    if (GumTrace->options.mode == GUM_OPTIONS_MODE_DEBUG) {
         LOGE("call jni func: %s", func_context->name);
     }
 }

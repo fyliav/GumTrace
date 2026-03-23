@@ -27,10 +27,33 @@ gboolean module_dependency_cb (const GumDependencyDetails * details, gpointer us
     return true;
 }
 
+gboolean on_range_found(const GumRangeDetails *details, gpointer user_data) {
+    auto instance = GumTrace::get_instance();
+
+    RangeInfo info;
+    info.base = (uintptr_t) details->range->base_address;
+    info.size = (uintptr_t) details->range->size;
+    info.end = info.base + info.size;
+
+    if (details->file) {
+        info.file_path = details->file->path;
+    } else {
+        info.file_path = "maybe heap";
+    }
+
+    instance->safa_ranges.push_back(info);
+    return TRUE;
+}
+
 gboolean module_enumerate (GumModule * module, gpointer user_data) {
     auto instance = GumTrace::get_instance();
     const char *module_name = gum_module_get_name(module);
 
+    if (instance->modules.count(module_name) > 0) {
+        return true;
+    }
+
+#if PLATFORM_ANDROID
     auto module_path = gum_module_get_path(module);
     auto gum_module_range = gum_module_get_range(module);
 
@@ -49,20 +72,37 @@ gboolean module_enumerate (GumModule * module, gpointer user_data) {
         }
     }
 
-    // if (instance->modules.count(module_name) <= 0) {
-        // gum_stalker_exclude(instance->_stalker, gum_module_get_range(module));x
-    // }
-
     return true;
+
+#else
+
+    if (instance->modules.count(module_name) == 0) {
+        gum_stalker_exclude(instance->_stalker, gum_module_get_range(module));
+    }
+    return true;
+
+#endif
 }
 
 extern "C" __attribute__((visibility("default")))
-void init(const char *module_names, char *trace_file_path, int thread_id, GUM_OPTIONS options) {
+void init(const char *module_names, char *trace_file_path, int thread_id, GUM_OPTIONS* options) {
 
     gum_init();
 
     GumTrace *instance = GumTrace::get_instance();
-    instance->options = options;
+    memcpy(&instance->options, options, sizeof(GUM_OPTIONS));
+
+    instance->_stalker = gum_stalker_new();
+    gum_stalker_set_trust_threshold(instance->_stalker, 0);
+    gum_stalker_set_ratio(instance->_stalker, 1);
+    if (instance->options.mode == GUM_OPTIONS_MODE_STABLE) {
+        gum_process_enumerate_ranges(GUM_PAGE_RW, on_range_found, nullptr);
+
+        std::sort(instance->safa_ranges.begin(), instance->safa_ranges.end(),
+          [](const RangeInfo &a, const RangeInfo &b) { return a.base < b.base; });
+        gum_stalker_set_trust_threshold(instance->_stalker, 2);
+        gum_stalker_set_ratio(instance->_stalker, 5);
+    }
 
     auto module_names_vector = Utils::str_split(module_names, ',');
     for (const auto &module_name: module_names_vector) {
@@ -131,7 +171,7 @@ void* thread_function(void* arg) {
 
     while (true) {
         if (instance->trace_file.is_open()) {
-            if (!(instance->options & _GUM_OPTIONS_DEBUG)) {
+            if (!(instance->options.mode == GUM_OPTIONS_MODE_DEBUG)) {
                 struct stat stat_buf;
                 int ret = stat(instance->trace_file_path, &stat_buf);
 
@@ -156,7 +196,7 @@ void* thread_function(void* arg) {
             break;
         }
 
-        if (instance->options & _GUM_OPTIONS_DEBUG) {
+        if (instance->options.mode == GUM_OPTIONS_MODE_DEBUG) {
             usleep(1000);
         } else {
             usleep(1000 * 1000 * 20);

@@ -12,7 +12,7 @@ function loadGumTrace() {
     let soHandle = dlopen(Memory.allocUtf8String('/data/local/tmp/' + traceSoName), 2)
     console.log('GumTrace loaded:', soHandle)
 
-    gumtrace_init = new NativeFunction(dlsym(soHandle, Memory.allocUtf8String('init')), 'void', ['pointer', 'pointer', 'int', 'int'])
+    gumtrace_init = new NativeFunction(dlsym(soHandle, Memory.allocUtf8String('init')), 'void', ['pointer', 'pointer', 'int', 'pointer'])
     gumtrace_run = new NativeFunction(dlsym(soHandle, Memory.allocUtf8String('run')), 'void', [])
     gumtrace_unrun = new NativeFunction(dlsym(soHandle, Memory.allocUtf8String('unrun')), 'void', [])
 }
@@ -23,7 +23,12 @@ function startTrace() {
     let moduleNames = Memory.allocUtf8String(targetSo)
     let outputPath = Memory.allocUtf8String('/data/data/com.example.app/trace.log')
     let threadId = 0   // 0 = 当前线程
-    let options = 0    // 1 = DEBUG 模式
+    let options = Memory.alloc(8)
+
+    // 0 = Stand 模式
+    // 1 = DEBUG 模式
+    // 2 = Stable 模式
+    options.writeU64(0)
 
     console.log('start trace')
 
