@@ -4,19 +4,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -z "${ANDROID_NDK_HOME:-}" ]; then
-    for candidate in \
-        "$HOME/Library/Android/sdk/ndk/30.0.14904198" \
-        "$HOME/Library/Android/sdk/ndk/29.0.14206865" \
-        "$HOME/Library/Android/sdk/ndk/27.3.13750724"
-    do
-        if [ -d "$candidate" ]; then
-            ANDROID_NDK_HOME="$candidate"
-            break
-        fi
-    done
-fi
-
 if [ -z "${ANDROID_NDK_HOME:-}" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
     echo "Please set ANDROID_NDK_HOME to your Android NDK installation path."
     exit 1

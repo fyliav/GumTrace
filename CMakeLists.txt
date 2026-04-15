@@ -2,17 +2,21 @@ cmake_minimum_required(VERSION 3.10)
 project(GumTrace CXX)
 
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(${CMAKE_SOURCE_DIR}/libs)
 include_directories(${CMAKE_SOURCE_DIR})
 
-
-add_library(GumTrace SHARED
+set(GUMTRACE_SOURCES
         src/main.cpp
         src/GumTrace.cpp
         src/Utils.cpp
         src/CallbackContext.cpp
         src/FuncPrinter.cpp
+)
+
+add_library(GumTrace SHARED
+        ${GUMTRACE_SOURCES}
 )
 
 if(ANDROID)
@@ -29,11 +33,21 @@ if(ANDROID)
 else()
     message(STATUS "Configuring for iOS")
 
-    set(DEVELOPER_DIR "/Applications/Xcode.app/Contents/Developer")
+    enable_language(OBJCXX)
+
+    execute_process(
+            COMMAND xcode-select -p
+            OUTPUT_VARIABLE DEVELOPER_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(NOT DEVELOPER_DIR)
+        message(FATAL_ERROR "Unable to locate Xcode developer directory")
+    endif()
+
     set(CMAKE_XCODE_DEVELOPER_DIR ${DEVELOPER_DIR})
 
     execute_process(
-            COMMAND xcrun --sdk iphoneos --show-sdk-path
+            COMMAND /usr/bin/env DEVELOPER_DIR=${DEVELOPER_DIR} xcrun --sdk iphoneos --show-sdk-path
             OUTPUT_VARIABLE IOS_SDK_PATH
             OUTPUT_STRIP_TRAILING_WHITESPACE
     )
@@ -41,10 +55,14 @@ else()
     set(CMAKE_OSX_SYSROOT ${IOS_SDK_PATH})
     message(STATUS "iOS SDK Path: ${IOS_SDK_PATH}")
 
-    target_include_directories(GumTrace SYSTEM PUBLIC .
-            ${IOS_SDK_PATH}/System/Library/Frameworks/Foundation.framework/Headers)
+    set_source_files_properties(${GUMTRACE_SOURCES} PROPERTIES LANGUAGE OBJCXX)
+
+    target_include_directories(GumTrace SYSTEM PUBLIC .)
 
     set_target_properties(GumTrace PROPERTIES
+            LINKER_LANGUAGE OBJCXX
+            OBJCXX_STANDARD 11
+            OBJCXX_STANDARD_REQUIRED YES
             BUNDLE FALSE
             FRAMEWORK FALSE
             XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
@@ -72,8 +90,4 @@ else()
             "-framework Foundation"
             "-framework CoreFoundation"
     )
-
-    set(CMAKE_C_COMPILER ${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang)
-    set(CMAKE_CXX_COMPILER ${DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ObjC++")
 endif()
